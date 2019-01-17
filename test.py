@@ -3,7 +3,7 @@ import os, re, time, configparser, threading, operator, subprocess
 
 #设备数量
 [DEVICE_NUM]
-num = 2
+num = 1
 
 #设备类型：M3S M4S为1，其余为0
 [DEVICE_TYPE]
@@ -12,7 +12,7 @@ type_1 = 0
 
 #设备ip，后缀作为不同设备区分
 [DEVICE_IP]
-ip_0 = 20.1.88.213:5555
+ip_0 = 20.1.88.192:5555
 ip_1 = 20.1.88.193:5555
 
 #本地log地址
@@ -20,20 +20,23 @@ ip_1 = 20.1.88.193:5555
 base_dir = D:\test_log\
 
 '''
+#adb需要添加到系统环境变量
 #M3S M4S
 adb_M3_4S_cmd = 'cd /data/data/com.homedoor2.tvlauncher/files && chmod 777 tcpdump && tcpdump -i any -p -s 0 -G 10 -w /sdcard/998.pcap && exit'
 
 class Self_def_shell(object):
     def run_cmd(self, cmd) :
-        res = subprocess.Popen(cmd, shell = True, stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
+        res = subprocess.Popen(cmd, shell = False, stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
         time.sleep(1)
 
-# 检查所有设备是否连接成功，所有配置文件中的设备连接后返回True
-def devices_connect_check(devices_ip_list_sorted):
+# 检查所有设备是否连接成功，需配置文件中的所有设备连接后返回True
+def devices_connect_check(cfg_devices_ip_list_sorted):
     devices_connect_mes = os.popen('adb devices').read()
-    pattern = re.compile(r'\d\S+')  # 查找数字，忽略换行
-    devices_connect_mes_list_sorted = sorted(pattern.findall(devices_connect_mes))
-    return operator.eq(devices_connect_mes_list_sorted, devices_ip_list_sorted), devices_connect_mes
+    if re.search('offline', devices_connect_mes) != None:
+        return False, devices_connect_mes
+    pattern_ip = re.compile(r'\d\S+')  # 查找数字，忽略换行
+    devices_connect_mes_list_sorted = sorted(pattern_ip.findall(devices_connect_mes))
+    return operator.eq(devices_connect_mes_list_sorted, cfg_devices_ip_list_sorted), devices_connect_mes
 
 # 连接/断开配置文件中的设备
 def devices_connect_dis(devices_ip_list, flag = True):
@@ -58,6 +61,7 @@ def excute(type, ip_addr, tcpdump_time, log_dir, device_num):
         shell_generate_pcap = Self_def_shell()
         if type == '1':
             cmd = r'adb -s ' + ip_addr + r' shell cd /data/data/com.homedoor2.tvlauncher/files && chmod 777 tcpdump && tcpdump -i any -p -s 0 ' + r' -w /sdcard/' + time_now + r'.pcap '
+            print(cmd)
         if type == '0':
             cmd = r'adb -s ' + ip_addr + r' shell cd /data/data/com.homedoor2.tvlauncher/files && chmod 777 tcpdump && ./tcpdump -i any -p -s 0 ' + r' -w /sdcard/' + time_now + r'.pcap'
         shell_generate_pcap.run_cmd(cmd)
@@ -127,5 +131,5 @@ if __name__ == '__main__':
 
     else:
         devices_connect_dis(devices_ip_list, False)
-        print("connect error ", connect_mes[1])
+        print("设备连接错误 ", connect_mes[1])
         os.system("error")

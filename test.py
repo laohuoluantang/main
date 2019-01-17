@@ -1,11 +1,15 @@
 import os, re, time, configparser, threading, operator, subprocess
 ''''
 
+#功能选择，0：抓包， 1：安装版本， 2：取日志
+[FUNC_SELECT]
+func = 0
+
 #设备数量
 [DEVICE_NUM]
 num = 1
 
-#设备类型：M3S M4S为1，其余为0
+#设备类型：M3S M4S为1，其余为0，后缀作为不同设备区分
 [DEVICE_TYPE]
 type_0 = 1
 type_1 = 0
@@ -56,12 +60,12 @@ ip_addr 设备ip
 tcpdump_time 抓包时长
 time_flag 时间标志，用于区分抓包文件
 '''
-def excute(type, ip_addr, tcpdump_time, log_dir, device_num):
+def excute(func_select, type, ip_addr, tcpdump_time, log_dir, device_num, apk_dir):
+    if func_select == '0':
         time_now = str(time.strftime("%Y%m%d%H%M%S", time.localtime()))
         shell_generate_pcap = Self_def_shell()
         if type == '1':
             cmd = r'adb -s ' + ip_addr + r' shell cd /data/data/com.homedoor2.tvlauncher/files && chmod 777 tcpdump && tcpdump -i any -p -s 0 ' + r' -w /sdcard/' + time_now + r'.pcap '
-            print(cmd)
         if type == '0':
             cmd = r'adb -s ' + ip_addr + r' shell cd /data/data/com.homedoor2.tvlauncher/files && chmod 777 tcpdump && ./tcpdump -i any -p -s 0 ' + r' -w /sdcard/' + time_now + r'.pcap'
         shell_generate_pcap.run_cmd(cmd)
@@ -74,13 +78,26 @@ def excute(type, ip_addr, tcpdump_time, log_dir, device_num):
         shell_pull_pcap.run_cmd(r'adb -s ' + ip_addr +' pull /sdcard/' + time_now + r'.pcap ' + log_dir)
         time.sleep(5 + int(int(tcpdump_time) / 2))
 
+    if func_select == '1':
+        shell_install_apk = Self_def_shell()
+        cmd = r'adb -s ' + ip_addr + r' install -r ' + apk_dir
+        shell_install_apk.run_cmd(cmd)
+        print('设备' + device_num + '安装中')
+
+    if func_select == '2':
+        shell_get_log = Self_def_shell()
+        cmd = r'adb -s ' + ip_addr + r' pull /sdcard/MXlog ' + log_dir
+        shell_get_log.run_cmd(cmd)
+        print('设备' + device_num + '取回日志中')
+
 if __name__ == '__main__':
     #配置文件读取
     cfg = configparser.ConfigParser()
     cfg.readfp(open('cfg.ini'))
     device_num = cfg.get('DEVICE_NUM', 'num')
     base_dir = cfg.get('LOG_BASE_DIR', 'base_dir')
-
+    func_select = cfg.get('FUNC_SELECT', 'func_select')
+    apk_dir = cfg.get('APK_DIR', 'apk_dir')
     #excute参数构造
     log_dir_list = list(map(lambda i: str(base_dir) + str(i), range(0, int(device_num))))
     devices_ip_list = list(map(lambda i: cfg.get('DEVICE_IP', 'ip_' + str(i)), range(0, int(device_num))))
@@ -106,7 +123,7 @@ if __name__ == '__main__':
         #测试指令创建
         excute_commands = []
         for i in range(0, int(device_num)):
-            cmd = [devices_type_list[i], devices_ip_list[i], tcpdump_time_list[i], log_dir_list[i], str(i)]
+            cmd = [func_select, devices_type_list[i], devices_ip_list[i], tcpdump_time_list[i], log_dir_list[i], str(i), apk_dir]
             excute_commands.append(cmd)
 
         threads = []
@@ -126,8 +143,8 @@ if __name__ == '__main__':
         for i in range(threads_count):
             threads[i].join()
             print('thread' + str(i) + ' join')
-
-        devices_connect_dis(devices_ip_list, False)
+        if func_select == '0':
+            devices_connect_dis(devices_ip_list, False)
 
     else:
         devices_connect_dis(devices_ip_list, False)

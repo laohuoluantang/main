@@ -32,6 +32,7 @@ class Self_def_shell(object):
     def run_cmd(self, cmd) :
         res = subprocess.Popen(cmd, shell = False, stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
         time.sleep(1)
+        return res
 
 # 检查所有设备是否连接成功，需配置文件中的所有设备连接后返回True
 def devices_connect_check(cfg_devices_ip_list_sorted):
@@ -74,26 +75,38 @@ def excute(func_select, type, ip_addr, tcpdump_time, log_dir, device_num, apk_di
         shell_kill_tcpdump = Self_def_shell()
         kill_cmd = r'adb -s ' + ip_addr + r' shell busybox killall tcpdump'
         shell_kill_tcpdump.run_cmd(kill_cmd)
+        print('取回' + ip_addr + '抓包文件中')
         shell_pull_pcap = Self_def_shell()
-        shell_pull_pcap.run_cmd(r'adb -s ' + ip_addr +' pull /sdcard/' + time_now + r'.pcap ' + log_dir)
-        time.sleep(5 + int(int(tcpdump_time) / 2))
+        ret = shell_pull_pcap.run_cmd(r'adb -s ' + ip_addr +' pull -a /sdcard/' + time_now + r'.pcap ' + log_dir)
+        print(ret.stdout.read())
+        print('删除' + ip_addr + '盒子内部抓包数据中')
+        shell_rm_pcap = Self_def_shell()
+        ret = shell_rm_pcap.run_cmd(r'adb -s ' + ip_addr + r' shell cd /sdcard && rm ' + time_now + r'.pcap')
+        print(ret.stdout.read())
 
     if func_select == '1':
+        print('设备' + device_num + '安装中')
         shell_install_apk = Self_def_shell()
         cmd = r'adb -s ' + ip_addr + r' install -r ' + apk_dir
-        shell_install_apk.run_cmd(cmd)
-        print('设备' + device_num + '安装中')
+        ret = shell_install_apk.run_cmd(cmd)
+        print(ret.stdout.read())
 
     if func_select == '2':
-        shell_get_log = Self_def_shell()
-        cmd = r'adb -s ' + ip_addr + r' pull /sdcard/MXlog ' + log_dir
-        shell_get_log.run_cmd(cmd)
         print('设备' + device_num + '取回日志中')
+        shell_get_mx_log = Self_def_shell()
+        cmd_mx_log = r'adb -s ' + ip_addr + r' pull -a /sdcard/MXlog ' + log_dir
+        ret = shell_get_mx_log.run_cmd(cmd_mx_log)
+        print(ret.stdout.read())
+        shell_get_anr_log = Self_def_shell()
+        cmd_anr = r'adb -s ' + ip_addr + r' pull -a /data/anr ' + log_dir
+        ret = shell_get_mx_log.run_cmd(cmd_anr)
+        print(ret.stdout.read())
+
 
 if __name__ == '__main__':
     #配置文件读取
     cfg = configparser.ConfigParser()
-    cfg.readfp(open('cfg.ini'))
+    cfg.readfp(open('cfg.ini', encoding='UTF-8'))
     device_num = cfg.get('DEVICE_NUM', 'num')
     base_dir = cfg.get('LOG_BASE_DIR', 'base_dir')
     func_select = cfg.get('FUNC_SELECT', 'func_select')
@@ -143,10 +156,12 @@ if __name__ == '__main__':
         for i in range(threads_count):
             threads[i].join()
             print('thread' + str(i) + ' join')
-        if func_select == '0':
+
+        if (func_select == '2' or func_select == '0'):
             devices_connect_dis(devices_ip_list, False)
 
     else:
         devices_connect_dis(devices_ip_list, False)
-        print("设备连接错误 ", connect_mes[1])
+        print("设备连接错误 连接状态")
+        print(connect_mes[1])
         os.system("error")
